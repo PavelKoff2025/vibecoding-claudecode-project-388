@@ -1,14 +1,56 @@
-cd vibecoding-claudecode-project-388
+---
+name: extract-price
+description: Извлекает цену товара с одной страницы интернет-магазина по её URL. Применяй, когда пользователь дал ссылку на товар (например, Читай-город) и просит узнать цену, скидку или наличие рассрочки. Возвращает структурированный объект, а не текст.
+---
 
-# SKILL.md
-nano .claude/skills/extract-price/SKILL.md      # вставь содержимое из блока 1
+# extract-price
 
-# extract_price.py
-nano .claude/skills/extract-price/extract_price.py   # вставь код из блока 2
+Извлекает цену товара по URL и возвращает структурированный объект.
 
-# зависимости
-echo -e "requests\nbeautifulsoup4" > requirements.txt
+## Контракт
 
-git add .
-git commit -m "Скилл extract-price: SKILL.md + Python-реализация"
-git push
+Вход: один URL страницы товара (строка).
+
+Выход: объект строго такой формы:
+
+    {
+      "regular_price": 1799,
+      "sale_price": null,
+      "has_credit": false
+    }
+
+- regular_price — обычная цена, число без валюты и пробелов.
+- sale_price — цена по скидке или null, если скидки нет.
+- has_credit — true/false: доступна ли рассрочка.
+
+Если цена не найдена — соответствующее поле равно null.
+Ответ должен быть только объектом контракта, без свободного текста.
+
+## Логика извлечения
+
+1. Получить HTML: GET-запрос по URL с реалистичным User-Agent и
+   Accept-Language ru-RU. Проверить статус (raise_for_status).
+2. Найти цену: приоритетный источник — блоки
+   script type=application/ld+json. Разобрать JSON и рекурсивно
+   обойти структуру (в т.ч. вложенный @graph), собирая значения
+   ключей price, lowPrice, highPrice внутри узлов Offer.
+3. Нормализовать число: убрать неразрывные пробелы, пробелы,
+   символ валюты, заменить запятую на точку, привести к числу.
+   Отбросить мусор фильтром диапазона (10–200000).
+4. Определить скидку: одна цена — это regular_price, sale_price=null.
+   Две и более — меньшая в sale_price, большая в regular_price.
+5. Рассрочка: искать в тексте слова рассрочк, долями, сплит, частями.
+6. Если цена не найдена — вернуть поля null, объект всё равно возвращается.
+
+## Как выполнять
+
+Скилл реализован в extract_price.py в этой же папке. Запуск:
+
+    python .claude/skills/extract-price/extract_price.py "<URL>"
+
+Скрипт печатает JSON-объект контракта в stdout.
+
+## Проверено на URL
+
+- proshchanie-s-illyuziyami-3035451 -> regular_price 1799, sale_price null, has_credit false
+- biblia-vina-3158884 -> regular_price 4359, sale_price null, has_credit false
