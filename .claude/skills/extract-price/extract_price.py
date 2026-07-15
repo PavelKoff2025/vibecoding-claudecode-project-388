@@ -31,7 +31,28 @@ def _to_number(raw):
 def _valid(p):
     return p is not None and MIN_PRICE <= p <= MAX_PRICE
 
+def _deref(data, ref):
+    return data[ref] if isinstance(ref, int) and 0 <= ref < len(data) else ref
 
+
+def _prices_from_nuxt(html):
+    tag = BeautifulSoup(html, "html.parser").find("script", id="__NUXT_DATA__")
+    if not tag or not tag.string:
+        return None
+    data = json.loads(tag.string)
+
+    for node in data:
+        if not (isinstance(node, dict) and "price" in node):
+            continue
+        price_obj = _deref(data, node["price"])
+        if not (isinstance(price_obj, dict) and "base" in price_obj and "sale" in price_obj):
+            continue
+
+        base = _to_number(_deref(data, price_obj["base"]))
+        sale = _to_number(_deref(data, price_obj["sale"]))
+        if _valid(base) and _valid(sale):
+            return max(base, sale), min(base, sale)
+    return None
 def _walk(node, prices):
     if isinstance(node, dict):
         for key, val in node.items():
