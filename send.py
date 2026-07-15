@@ -1,34 +1,37 @@
-#!/usr/bin/env python3
-"""send.py — отправка сообщения в Telegram. Использование: python3 send.py "текст" """
+"""Отправка сообщения в Telegram. Только стандартная библиотека."""
 import os
 import sys
-import requests
-from dotenv import load_dotenv
-
-load_dotenv()
-
-TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
-CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
+import json
+import urllib.request
+import urllib.parse
 
 
-def send(text: str) -> None:
-    if not TOKEN or not CHAT_ID:
-        print("⚠️  Не заданы TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID в .env")
-        sys.exit(1)
+def load_env(path=".env"):
+    """Читает .env вручную, без python-dotenv."""
+    if os.path.exists(path):
+        for line in open(path, encoding="utf-8"):
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                k, v = line.split("=", 1)
+                os.environ.setdefault(k.strip(), v.strip().strip('"').strip("'"))
 
-    r = requests.post(
-        f"https://api.telegram.org/bot{TOKEN}/sendMessage",
-        json={"chat_id": CHAT_ID, "text": text, "disable_web_page_preview": True},
-        timeout=15,
-    )
-    if r.status_code != 200:
-        print(f"⚠️  Ошибка Telegram ({r.status_code}): {r.text}")
-        sys.exit(1)
-    print("Отправлено.")
+
+def send(text: str) -> dict:
+    token = os.environ["TELEGRAM_BOT_TOKEN"]
+    chat_id = os.environ["TELEGRAM_CHAT_ID"]
+    url = f"https://api.telegram.org/bot{token}/sendMessage"
+    data = urllib.parse.urlencode({
+        "chat_id": chat_id,
+        "text": text,
+        "parse_mode": "HTML",
+    }).encode()
+    req = urllib.request.Request(url, data=data)
+    with urllib.request.urlopen(req) as resp:
+        return json.load(resp)
 
 
 if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        print("Использование: python3 send.py \"текст сообщения\"")
-        sys.exit(1)
-    send(sys.argv[1])
+    load_env()
+    msg = sys.argv[1] if len(sys.argv) > 1 else "✅ Тест отправки через urllib"
+    result = send(msg)
+    print("OK" if result.get("ok") else result)
